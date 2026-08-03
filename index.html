@@ -450,7 +450,7 @@ function showErg(){
     }
   };
 
-  fetch('/.netlify/functions/spiegelung', {
+  fetch('/api/spiegelung', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify(payload)
@@ -463,9 +463,13 @@ function showErg(){
         renderSpiegelung(text);
       });
     }
-    // Stream lesen und live anzeigen
+    // Stream lesen und live anzeigen.
+    // Die Edge Function reicht den rohen Claude-SSE-Stream unveraendert durch
+    // (keine Rechenarbeit dort, wegen des 50ms-CPU-Limits von Edge Functions).
+    // Das Zerlegen der SSE-Zeilen und Herausfiltern des Texts passiert hier im Browser.
     var reader = r.body.getReader();
     var decoder = new TextDecoder();
+    var zeilenpuffer = '';
     var gesamt = '';
     var ersterChunk = true;
     function lies(){
@@ -476,14 +480,30 @@ function showErg(){
           document.getElementById('druck-btn').style.display='';
           return;
         }
-        gesamt += decoder.decode(res.value, {stream:true});
-        if(ersterChunk){
+        zeilenpuffer += decoder.decode(res.value, {stream:true});
+        var zeilen = zeilenpuffer.split('\n');
+        zeilenpuffer = zeilen.pop() || '';
+        zeilen.forEach(function(zeile){
+          zeile = zeile.trim();
+          if(zeile.indexOf('data:') !== 0) return;
+          var data = zeile.slice(5).trim();
+          if(data === '[DONE]' || !data) return;
+          try{
+            var evt = JSON.parse(data);
+            if(evt.type === 'content_block_delta' && evt.delta && evt.delta.type === 'text_delta' && evt.delta.text){
+              gesamt += evt.delta.text;
+            }
+          }catch(e){
+            // unvollstaendige Zeile, beim naechsten Chunk weitermachen
+          }
+        });
+        if(ersterChunk && gesamt){
           // Beim ersten Text: Ladeanzeige weg, Spiegelbereich zeigen
           document.getElementById('e-spiegelung-lade').style.display='none';
           document.getElementById('e-spiegelung').style.display='';
           ersterChunk = false;
         }
-        renderSpiegelung(gesamt);
+        if(gesamt) renderSpiegelung(gesamt);
         return lies();
       });
     }
