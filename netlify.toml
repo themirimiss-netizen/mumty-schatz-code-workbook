@@ -6,4 +6,5 @@
   node_bundler = "esbuild"
 
 [functions.spiegelung]
+  # Pro-Plan erlaubt bis zu 26 Sekunden
   timeout = 26
