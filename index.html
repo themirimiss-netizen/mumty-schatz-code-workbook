@@ -450,7 +450,7 @@ function showErg(){
     }
   };
 
-  fetch('/.netlify/functions/spiegelung', {
+  fetch('/api/spiegelung', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify(payload)
